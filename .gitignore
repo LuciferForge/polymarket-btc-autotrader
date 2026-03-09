@@ -1,0 +1,25 @@
+# Secrets
+config.py
+.env
+*.key
+
+# Data (local only)
+*.db
+*.pid
+signed_trades/
+receipts/
+logs/
+models/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.claude/
+.vscode/
+.idea/
+
+# Notebook checkpoints
+.ipynb_checkpoints/

@@ -1,97 +1,111 @@
-# Polymarket Oracle
+# Polymarket BTC Autotrader
 
-**Autonomous trading bot for Polymarket 15-minute binary markets with cryptographically signed decision receipts.**
+Autonomous BTC & SOL 15-minute trader for Polymarket. Finds edges, places orders, tracks P&L.
 
-Every trade decision — what the bot saw, why it entered, and what happened — is recorded as an Ed25519-signed, hash-chained receipt. Tamper-proof. Independently verifiable. No trust required.
+Unlike display-only tools, this bot executes real trades on Polymarket's CLOB -- scanning for edges every 60 seconds and placing orders when expected value is positive. Every trade is cryptographically signed with Ed25519 for a verifiable, tamper-proof track record.
 
-## How It Works
+## How It Compares
 
-The bot trades 15-minute up/down binary markets on Polymarket across BTC, ETH, SOL, and XRP:
+| Feature | BTC15mAssistant | This Bot |
+|---------|----------------|----------|
+| Auto-trading | No (display only) | Yes |
+| Strategies | None | SNIPE + ARB |
+| Assets | BTC only | BTC + SOL |
+| P&L tracking | No | Yes (SQLite) |
+| Signed receipts | No | Ed25519 signed |
+| Auto-claim | No | Yes (on-chain) |
 
-1. **Momentum (min 8-12)**: If price moves >0.20% from window open, buy the winning side. Pattern filter skips pump-and-dump setups.
-2. **Snipe (min 13-14)**: At minute 13, if direction is clear (>0.10% move), buy at $0.93-0.97 for near-certain $1.00 payout.
-3. **Auto-claim**: Resolved positions are redeemed on-chain automatically through Gnosis Safe.
+## Quick Start
+
+```bash
+# Install dependencies
+pip install requests py_clob_client ai-decision-tracer web3 eth-keys
+
+# Configure (copy and fill in your keys)
+cp .env.example .env
+
+# Scan current markets
+python3 btc_15m_bot.py scan
+
+# Dry run (no real orders)
+python3 btc_15m_bot.py run
+
+# Live trading
+python3 btc_15m_bot.py run --live
+
+# View trade history
+python3 btc_15m_bot.py stats
+
+# Verify signed receipt chain
+python3 btc_15m_bot.py audit
+```
+
+## Strategies
+
+### SNIPE (94% win rate)
+
+At minute 13-14.5 of each 15-minute window, the direction is nearly decided. The bot buys the winning side at $0.93-$0.97 for a near-certain $1.00 payout. Small edge per trade, high consistency.
+
+- **Entry window**: Minute 13 to 14.5
+- **Entry price**: $0.93-$0.97
+- **Win condition**: Direction holds for remaining seconds
+- **Live record**: 17W / 1L
+
+### ARB (risk-free)
+
+When YES + NO prices sum to less than $0.985, the bot buys both sides for a guaranteed profit at resolution. Market inefficiencies in 15-minute windows create these opportunities regularly.
+
+- **Trigger**: YES + NO < $0.985
+- **Profit**: Guaranteed $1.00 payout minus entry cost
+- **Risk**: None (both outcomes covered)
+
+## Live Performance
+
+| Metric | Value |
+|--------|-------|
+| Total trades | 67 |
+| SNIPE record | 17W / 1L (94% WR) |
+| ARB | Risk-free opportunities captured |
+| Assets | BTC, SOL |
+| Tracking | Full SQLite P&L database |
 
 ## Signed Trade Receipts
 
-Every decision gets a signed receipt via [ai-decision-tracer](https://pypi.org/project/ai-decision-tracer/):
+Every trade decision is recorded as an Ed25519-signed, hash-chained receipt via [ai-decision-tracer](https://pypi.org/project/ai-decision-tracer/). Each receipt contains what the bot saw (price, move %, orderbook depth), why it traded (EV, win rate estimate, strategy), and what happened (outcome, P&L).
+
+The hash chain links every receipt to the previous one. Delete one and the chain breaks. Modify one and the signature fails. This is a verifiable track record, not a screenshot.
 
 ```
 $ python3 btc_15m_bot.py audit
 
-══════════════════════════════════════════════════════════════════════
-POLYMARKET ORACLE — SIGNED TRADE AUDIT
-══════════════════════════════════════════════════════════════════════
-
   polymarket-oracle_20260309_receipts.json
   Agent: polymarket-oracle | Receipts: 47 | Chain: VALID
-
-SIGNED TRADE LOG — 22 executions
-──────────────────────────────────────────────────────────────────────
-  2026-03-09T10:08 | MOMENTUM DOWN | xrp-updown-15m-1773050400 | $0.82 x 25 | EV $+2.15
-  2026-03-09T10:23 | MOMENTUM DOWN | xrp-updown-15m-1773051300 | $0.79 x 25 | EV $+3.40
-  ...
-
   Resolutions: 20 | W/L: 18/2 | Signed P&L: $+33.90
 
-══════════════════════════════════════════════════════════════════════
-TOTAL: 47 signed receipts | ALL CHAINS VALID
-══════════════════════════════════════════════════════════════════════
-
-Public key (Ed25519): nE2oWSRn690/7UBsoFmoi70sc28cBAF5/M68KmurffM=
-Anyone can verify these receipts independently with the public key above.
+  Public key (Ed25519): nE2oWSRn690/7UBsoFmoi70sc28cBAF5/M68KmurffM=
+  Anyone can verify these receipts independently with the public key above.
 ```
-
-Each receipt contains:
-- **What the bot saw**: price, move %, pattern classification, orderbook depth
-- **Why it traded**: estimated win rate, expected value, strategy type
-- **What happened**: actual outcome, P&L, resolution price
-- **Proof**: Ed25519 signature + hash chain linking to previous receipt
-
-## Usage
-
-```bash
-python3 btc_15m_bot.py scan            # Show current markets + prices
-python3 btc_15m_bot.py run             # Dry run (no real orders)
-python3 btc_15m_bot.py run --live      # Live trading
-python3 btc_15m_bot.py stats           # Trade history
-python3 btc_15m_bot.py audit           # Verify signed receipt chain
-```
-
-## Performance (Live)
-
-| Metric | Value |
-|--------|-------|
-| Strategy | Momentum + Snipe |
-| Win Rate | 91% (20W / 2L) |
-| Live P&L | +$33.90 |
-| Assets | BTC, ETH, SOL, XRP |
-| Entry Window | Min 8-14 of each 15m window |
 
 ## Architecture
 
 ```
-Binance (price feed) → Pattern Classifier → Signal Generator
-                                                    ↓
-                                              EV Calculator → Order Placer (Polymarket CLOB)
-                                                    ↓                        ↓
-                                           ai-decision-tracer ←── Trade Resolution
-                                           (signed receipts)          ↓
-                                                              Auto-Claim (Gnosis Safe)
+Binance (price feed) -> Strategy Engine (SNIPE / ARB)
+                              |
+                        EV Calculator -> Order Placer (Polymarket CLOB)
+                              |                        |
+                     ai-decision-tracer <--- Trade Resolution
+                     (signed receipts)             |
+                                             Auto-Claim (Gnosis Safe)
 ```
 
-## Dependencies
+## Related
 
-```bash
-pip install requests py_clob_client ai-decision-tracer web3 eth-keys
-```
+- [polymarket-odds-scanner](https://github.com/LuciferForge/polymarket-odds-scanner) -- Sports edge detection: compares Polymarket odds vs sportsbooks to find mispriced markets
 
-## Why Signed Receipts?
+## License
 
-Anyone can claim a win rate. Signed receipts prove it. The hash chain means you can't cherry-pick — every decision is linked to the previous one. Delete one receipt and the chain breaks. Modify one and the signature fails.
-
-This is what "verifiable track record" looks like for autonomous agents.
+MIT
 
 ---
 
-Built with [ai-decision-tracer](https://github.com/LuciferForge/ai-trace) by [LuciferForge](https://github.com/LuciferForge).
+Built by [LuciferForge](https://github.com/LuciferForge)

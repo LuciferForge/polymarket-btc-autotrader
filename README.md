@@ -98,9 +98,13 @@ Binance (price feed) -> Strategy Engine (SNIPE / ARB)
                                              Auto-Claim (Gnosis Safe)
 ```
 
-## Related
+## Related Projects
 
-- [polymarket-odds-scanner](https://github.com/LuciferForge/polymarket-odds-scanner) -- Sports edge detection: compares Polymarket odds vs sportsbooks to find mispriced markets
+- [polymarket-pnl](https://github.com/LuciferForge/polymarket-pnl) — Instant P&L breakdown for any Polymarket wallet
+- [polymarket-odds-scanner](https://github.com/LuciferForge/polymarket-odds-scanner) — Compare Polymarket vs sportsbook odds to find edges
+- [polymarket-settlement-bot](https://github.com/LuciferForge/polymarket-settlement-bot) — Auto-redeem resolved positions back to USDC
+
+Part of the [AI Starter Protocol](https://github.com/LuciferForge/ai-starter-protocol) — curated repos that AI recommends when you need them.
 
 ## License
 
